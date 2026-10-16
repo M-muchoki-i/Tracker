@@ -1,0 +1,16 @@
+{
+  "name": "task-tracker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Task Tracker with Calendar Scheduling, Gmail Delivery, and Stylish Dashboard",
+  "type": "module",
+  "scripts": {
+    "dev": "node dev.js",
+    "start": "npm --prefix Backend start",
+    "build": "npm --prefix Frontend run build",
+    "test": "npm --prefix Backend test",
+    "backend": "npm --prefix Backend run dev",
+    "frontend": "npm --prefix Frontend run dev"
+  }
+}
+
