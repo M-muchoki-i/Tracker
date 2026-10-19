@@ -10,12 +10,19 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || "0.0.0.0";
 const DATABASE_PATH =
-  process.env.DATABASE_PATH || path.join(__dirname, "../data/tasks.db");
+  process.env.DATABASE_PATH ||
+  (process.env.VERCEL
+    ? path.join("/tmp", "tasks.db")
+    : path.join(__dirname, "../data/tasks.db"));
 
 const db = createDb(DATABASE_PATH);
 const app = createApp(db);
 
-app.listen(PORT, HOST, () => {
-  console.log(`Task Tracker API listening on http://127.0.0.1:${PORT}`);
-  console.log(`Using database file: ${DATABASE_PATH}`);
-});
+if (!process.env.VERCEL) {
+  app.listen(PORT, HOST, () => {
+    console.log(`Task Tracker API listening on http://127.0.0.1:${PORT}`);
+    console.log(`Using database file: ${DATABASE_PATH}`);
+  });
+}
+
+export default app;

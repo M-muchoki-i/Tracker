@@ -32,7 +32,7 @@ function getScheduleBadgeInfo(scheduledDate, isCompleted) {
   const isPast = taskDateStr < todayStr;
   const isToday = taskDateStr === todayStr;
 
-  let label = taskDateStr;
+  let label;
   try {
     const [y, m, d] = taskDateStr.split("-").map(Number);
     const dateObj = new Date(y, m - 1, d);

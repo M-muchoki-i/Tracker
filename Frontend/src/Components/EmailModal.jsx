@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   Mail,
   X,
@@ -7,8 +7,6 @@ import {
   CheckCircle2,
   AlertCircle,
   Loader2,
-  Calendar,
-  CheckSquare,
 } from "lucide-react";
 import { buildGmailComposeUrl } from "../api.js";
 
@@ -23,32 +21,23 @@ export default function EmailModal({
   const [recipient, setRecipient] = useState(() => {
     return localStorage.getItem("task_tracker_last_email") || "";
   });
-  const [subject, setSubject] = useState("");
-  const [scope, setScope] = useState("all"); // 'single' | 'date' | 'scheduled' | 'all'
+  const [scope, setScope] = useState(() => {
+    if (initialTaskId) return "single";
+    if (initialDate) return "date";
+    return "scheduled";
+  });
+  const [subject, setSubject] = useState(() => {
+    if (initialTaskId) {
+      const singleTask = tasks.find((t) => t.id === initialTaskId);
+      return singleTask ? `Task Details: ${singleTask.title}` : "Task Details";
+    }
+    if (initialDate) {
+      return `Scheduled Tasks for ${initialDate}`;
+    }
+    return `Task Tracker - Scheduled Agenda (${new Date().toLocaleDateString()})`;
+  });
   const [sending, setSending] = useState(false);
   const [statusMessage, setStatusMessage] = useState(null); // { type: 'success' | 'info' | 'error', text, link }
-
-  // Set initial scope and subject when modal opens
-  useEffect(() => {
-    if (!isOpen) {
-      setStatusMessage(null);
-      return;
-    }
-
-    if (initialTaskId) {
-      setScope("single");
-      const singleTask = tasks.find((t) => t.id === initialTaskId);
-      setSubject(
-        singleTask ? `Task Details: ${singleTask.title}` : "Task Details",
-      );
-    } else if (initialDate) {
-      setScope("date");
-      setSubject(`Scheduled Tasks for ${initialDate}`);
-    } else {
-      setScope("scheduled");
-      setSubject(`Task Tracker - Scheduled Agenda (${new Date().toLocaleDateString()})`);
-    }
-  }, [isOpen, initialTaskId, initialDate, tasks]);
 
   if (!isOpen) return null;
 

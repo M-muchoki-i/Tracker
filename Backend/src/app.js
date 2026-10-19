@@ -6,7 +6,14 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import nodemailer from "nodemailer";
-import { toTask } from "./db.js";
+import { toTask, toUser } from "./db.js";
+import {
+  hashPassword,
+  verifyPassword,
+  generateToken,
+  optionalAuth,
+  requireAuth,
+} from "./auth.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -37,6 +44,31 @@ function validateScheduledDate(dateStr) {
   const parsed = new Date(dateStr);
   if (isNaN(parsed.getTime())) {
     return "Scheduled date is invalid.";
+  }
+  return null;
+}
+
+function validateEmail(email) {
+  if (
+    typeof email !== "string" ||
+    !email.trim().includes("@") ||
+    !email.trim().includes(".")
+  ) {
+    return "Please provide a valid email address.";
+  }
+  return null;
+}
+
+function validatePassword(password) {
+  if (typeof password !== "string" || password.length < 6) {
+    return "Password must be at least 6 characters.";
+  }
+  return null;
+}
+
+function validateName(name) {
+  if (typeof name !== "string" || name.trim().length === 0) {
+    return "Name is required.";
   }
   return null;
 }
@@ -138,13 +170,25 @@ export function createApp(db) {
 
   app.use(cors()); // lets the Vite dev server (port 5173) call this API
   app.use(express.json()); // parses JSON request bodies
+  app.use(optionalAuth); // parses JWT bearer token if present
+
+  const getUserByEmail = db.prepare(
+    "SELECT * FROM users WHERE email = ? COLLATE NOCASE",
+  );
+  const getUserById = db.prepare("SELECT * FROM users WHERE id = ?");
+  const insertUser = db.prepare(
+    "INSERT INTO users (name, email, passwordHash, salt, createdAt) VALUES (?, ?, ?, ?, ?)",
+  );
 
   const getAll = db.prepare(
     "SELECT * FROM tasks ORDER BY createdAt DESC, id DESC",
   );
+  const getAllByUser = db.prepare(
+    "SELECT * FROM tasks WHERE userId = ? OR userId IS NULL ORDER BY createdAt DESC, id DESC",
+  );
   const getById = db.prepare("SELECT * FROM tasks WHERE id = ?");
   const insert = db.prepare(
-    "INSERT INTO tasks (title, description, completed, scheduledDate, createdAt) VALUES (?, ?, ?, ?, ?)",
+    "INSERT INTO tasks (title, description, completed, scheduledDate, userId, createdAt) VALUES (?, ?, ?, ?, ?, ?)",
   );
   const update = db.prepare(
     "UPDATE tasks SET title = ?, description = ?, completed = ?, scheduledDate = ? WHERE id = ?",
@@ -156,13 +200,94 @@ export function createApp(db) {
     res.json({ status: "ok" });
   });
 
+  // POST /api/auth/signup (or /register)
+  app.post(["/api/auth/signup", "/api/auth/register"], (req, res) => {
+    const { name, email, password } = req.body ?? {};
+
+    const nameErr = validateName(name);
+    if (nameErr) return res.status(400).json({ error: nameErr });
+
+    const emailErr = validateEmail(email);
+    if (emailErr) return res.status(400).json({ error: emailErr });
+
+    const passErr = validatePassword(password);
+    if (passErr) return res.status(400).json({ error: passErr });
+
+    const existing = getUserByEmail.get(email.trim().toLowerCase());
+    if (existing) {
+      return res
+        .status(400)
+        .json({ error: "An account with this email already exists." });
+    }
+
+    const { hash, salt } = hashPassword(password);
+    const info = insertUser.run(
+      name.trim(),
+      email.trim().toLowerCase(),
+      hash,
+      salt,
+      new Date().toISOString(),
+    );
+
+    const newUser = getUserById.get(info.lastInsertRowid);
+    const safeUser = toUser(newUser);
+    const token = generateToken({
+      userId: safeUser.id,
+      email: safeUser.email,
+      name: safeUser.name,
+    });
+
+    res.status(201).json({ user: safeUser, token });
+  });
+
+  // POST /api/auth/login (or /signin)
+  app.post(["/api/auth/login", "/api/auth/signin"], (req, res) => {
+    const { email, password } = req.body ?? {};
+
+    const emailErr = validateEmail(email);
+    if (emailErr) return res.status(400).json({ error: emailErr });
+
+    if (!password) {
+      return res.status(400).json({ error: "Password is required." });
+    }
+
+    const user = getUserByEmail.get(email.trim().toLowerCase());
+    if (!user) {
+      return res.status(401).json({ error: "Invalid email or password." });
+    }
+
+    const valid = verifyPassword(password, user.passwordHash, user.salt);
+    if (!valid) {
+      return res.status(401).json({ error: "Invalid email or password." });
+    }
+
+    const safeUser = toUser(user);
+    const token = generateToken({
+      userId: safeUser.id,
+      email: safeUser.email,
+      name: safeUser.name,
+    });
+
+    res.json({ user: safeUser, token });
+  });
+
+  // GET /api/auth/me — returns current authenticated user
+  app.get("/api/auth/me", requireAuth, (req, res) => {
+    const user = getUserById.get(req.user.userId);
+    if (!user) {
+      return res.status(404).json({ error: "User not found." });
+    }
+    res.json({ user: toUser(user) });
+  });
+
   // GET /api/tasks — list all tasks, newest first
-  app.get("/api/tasks", (_req, res) => {
-    res.json(getAll.all().map(toTask));
+  app.get("/api/tasks", requireAuth, (req, res) => {
+    const list = getAllByUser.all(req.user.userId);
+    res.json(list.map(toTask));
   });
 
   // POST /api/tasks — create a task. Body: { title, description?, scheduledDate? }
-  app.post("/api/tasks", (req, res) => {
+  app.post("/api/tasks", requireAuth, (req, res) => {
     const { title, description = "", scheduledDate = null } = req.body ?? {};
 
     const error = validateTitle(title);
@@ -178,11 +303,14 @@ export function createApp(db) {
         ? scheduledDate.trim()
         : null;
 
+    const userId = req.user.userId;
+
     const info = insert.run(
       title.trim(),
       description.trim(),
       0,
       cleanDate,
+      userId,
       new Date().toISOString(),
     );
     res.status(201).json(toTask(getById.get(info.lastInsertRowid)));
@@ -190,7 +318,7 @@ export function createApp(db) {
 
   // PATCH /api/tasks/:id — edit a task or toggle completion.
   // Body may include any of: { title, description, completed, scheduledDate }
-  app.patch("/api/tasks/:id", (req, res) => {
+  app.patch("/api/tasks/:id", requireAuth, (req, res) => {
     const existing = getById.get(req.params.id);
     if (!existing) return res.status(404).json({ error: "Task not found." });
 
@@ -236,7 +364,7 @@ export function createApp(db) {
   });
 
   // DELETE /api/tasks/:id — remove a task
-  app.delete("/api/tasks/:id", (req, res) => {
+  app.delete("/api/tasks/:id", requireAuth, (req, res) => {
     const existing = getById.get(req.params.id);
     if (!existing) return res.status(404).json({ error: "Task not found." });
 
@@ -246,7 +374,7 @@ export function createApp(db) {
 
   // POST /api/tasks/send-email — send scheduled tasks agenda to Gmail / email
   // Body: { to, subject?, taskId?, taskIds?, sendAllScheduled? }
-  app.post("/api/tasks/send-email", async (req, res) => {
+  app.post("/api/tasks/send-email", requireAuth, async (req, res) => {
     try {
       const { to, subject, taskId, taskIds, sendAllScheduled } = req.body ?? {};
 
@@ -365,7 +493,7 @@ export function createApp(db) {
   });
 
   // POST /api/tasks/:id/send-email — convenience endpoint to email a single task
-  app.post("/api/tasks/:id/send-email", (req, res, next) => {
+  app.post("/api/tasks/:id/send-email", requireAuth, (req, res, next) => {
     req.body = { ...req.body, taskId: req.params.id };
     app._router.handle(
       Object.assign(req, { url: "/api/tasks/send-email", method: "POST" }),

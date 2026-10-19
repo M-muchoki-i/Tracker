@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Plus, Check, X, AlertCircle, Loader2, Calendar, Clock } from "lucide-react";
+import { Plus, Check, X, AlertCircle, Loader2, Calendar } from "lucide-react";
 
 export default function TaskForm({
   initialValues,
@@ -18,6 +18,12 @@ export default function TaskForm({
     if (initialScheduledDate) return initialScheduledDate;
     return "";
   });
+  const [prevInitialDate, setPrevInitialDate] = useState(initialScheduledDate);
+  if (initialScheduledDate !== prevInitialDate && !isEditing) {
+    setPrevInitialDate(initialScheduledDate);
+    setScheduledDate(initialScheduledDate || "");
+  }
+
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
   const titleInputRef = useRef(null);
@@ -28,13 +34,6 @@ export default function TaskForm({
       titleInputRef.current.focus();
     }
   }, [isEditing]);
-
-  // Sync scheduled date when initialScheduledDate changes
-  useEffect(() => {
-    if (initialScheduledDate && !isEditing) {
-      setScheduledDate(initialScheduledDate);
-    }
-  }, [initialScheduledDate, isEditing]);
 
   const titleLength = title.trim().length;
   const isNearLimit = title.length > 180;

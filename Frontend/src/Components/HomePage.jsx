@@ -9,18 +9,21 @@ import {
   Plus,
   Sparkles,
   Zap,
-  ShieldCheck,
   Layers,
   ChevronRight,
   CalendarDays,
+  Lock,
+  LogIn,
 } from "lucide-react";
 
 export default function HomePage({
   tasks = [],
+  user = null,
   onNavigate,
   onToggleTask,
   onOpenNewTaskModal,
   onOpenEmailModal,
+  onOpenAuthModal,
 }) {
   // Time-based greeting
   const greeting = useMemo(() => {
@@ -29,6 +32,8 @@ export default function HomePage({
     if (hour < 18) return "Good afternoon";
     return "Good evening";
   }, []);
+
+  const displayName = user?.name ? user.name.split(" ")[0] : null;
 
   const todayDateFormatted = useMemo(() => {
     return new Date().toLocaleDateString("en-US", {
@@ -47,13 +52,6 @@ export default function HomePage({
       return t.scheduledDate && t.scheduledDate.slice(0, 10) === todayStr;
     });
   }, [tasks, todayStr]);
-
-  const upcomingTasks = useMemo(() => {
-    return tasks
-      .filter((t) => !t.completed && t.scheduledDate && t.scheduledDate.slice(0, 10) > todayStr)
-      .slice(0, 4);
-  }, [tasks, todayStr]);
-
   const totalTasks = tasks.length;
   const completedTasks = useMemo(
     () => tasks.filter((t) => t.completed).length,
@@ -69,6 +67,52 @@ export default function HomePage({
 
   return (
     <div className="space-y-10 pb-12 animate-in fade-in duration-300">
+      {/* Prominent Authentication Banner for Guests */}
+      {!user && (
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 bg-gradient-to-r from-indigo-50 via-purple-50 to-rose-50 border border-indigo-200/90 rounded-3xl shadow-xs">
+          <div className="flex items-center gap-3.5">
+            <div className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center flex-shrink-0 shadow-sm shadow-indigo-600/20">
+              <Lock className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-sm sm:text-base font-bold text-slate-900">
+                Sign In Required
+              </h3>
+              <p className="text-xs text-slate-600 mt-0.5">
+                You must sign in or log in before you can create tasks, view your calendar, or send email agendas.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2.5 w-full sm:w-auto">
+            <button
+              type="button"
+              onClick={() =>
+                onOpenAuthModal(
+                  "signin",
+                  "Please sign in or log in to create tasks, view calendar, and send email.",
+                )
+              }
+              className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-all shadow-xs cursor-pointer"
+            >
+              <LogIn className="w-3.5 h-3.5" />
+              <span>Sign In</span>
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                onOpenAuthModal(
+                  "signup",
+                  "Create an account to start creating and scheduling tasks.",
+                )
+              }
+              className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-4 py-2 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl transition-all shadow-2xs cursor-pointer"
+            >
+              <span>Register</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Hero Banner */}
       <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 text-white p-7 sm:p-10 md:p-12 shadow-xl border border-slate-800">
         {/* Subtle decorative glow */}
@@ -82,45 +126,124 @@ export default function HomePage({
           </div>
 
           <h1 className="text-3xl sm:text-4xl md:text-5xl font-black tracking-tight leading-tight sm:leading-none">
-            {greeting}, <br />
-            <span className="bg-gradient-to-r from-indigo-300 via-indigo-100 to-white bg-clip-text text-transparent">
-              Master Your Schedule.
-            </span>
+            {user ? (
+              <>
+                {greeting}{displayName ? `, ${displayName}` : ""}, <br />
+                <span className="bg-gradient-to-r from-indigo-300 via-indigo-100 to-white bg-clip-text text-transparent">
+                  Master Your Schedule.
+                </span>
+              </>
+            ) : (
+              <>
+                Welcome to Task Tracker, <br />
+                <span className="bg-gradient-to-r from-indigo-300 via-indigo-100 to-white bg-clip-text text-transparent">
+                  Master Your Schedule.
+                </span>
+              </>
+            )}
           </h1>
 
           <p className="text-sm sm:text-base text-slate-300 leading-relaxed font-normal pt-1">
-            Stay organized, plan your week on the calendar, and dispatch your daily task
-            agenda straight to Gmail with zero hassle.
+            {user
+              ? "Stay organized, plan your week on the calendar, and dispatch your daily task agenda straight to Gmail with zero hassle."
+              : "Organize, schedule on the calendar, and dispatch daily agendas to Gmail. Sign in or register an account before creating tasks, scheduling deadlines, or sending emails."}
           </p>
 
           {/* Action CTAs */}
           <div className="flex flex-wrap items-center gap-3 pt-3">
-            <button
-              type="button"
-              onClick={() => onNavigate("tasks")}
-              className="inline-flex items-center gap-2 px-5 py-3 text-sm font-bold text-slate-950 bg-white hover:bg-slate-100 rounded-2xl transition-all shadow-md hover:shadow-lg cursor-pointer transform active:scale-95"
-            >
-              <span>Manage Tasks</span>
-              <ArrowRight className="w-4 h-4 text-indigo-600" />
-            </button>
+            {!user ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() =>
+                    onOpenAuthModal(
+                      "signin",
+                      "Please sign in or log in to manage your tasks, calendar, and email.",
+                    )
+                  }
+                  className="inline-flex items-center gap-2 px-5 py-3 text-sm font-bold text-slate-950 bg-white hover:bg-slate-100 rounded-2xl transition-all shadow-md hover:shadow-lg cursor-pointer transform active:scale-95"
+                >
+                  <LogIn className="w-4 h-4 text-indigo-600" />
+                  <span>Sign In / Log In</span>
+                </button>
 
-            <button
-              type="button"
-              onClick={() => onNavigate("calendar")}
-              className="inline-flex items-center gap-2 px-5 py-3 text-sm font-bold text-white bg-white/10 hover:bg-white/20 border border-white/20 rounded-2xl transition-all backdrop-blur-md cursor-pointer"
-            >
-              <CalendarIcon className="w-4 h-4 text-indigo-300" />
-              <span>View Calendar</span>
-            </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    onOpenAuthModal(
+                      "signup",
+                      "Create an account to start tracking tasks and scheduling events.",
+                    )
+                  }
+                  className="inline-flex items-center gap-2 px-5 py-3 text-sm font-bold text-white bg-white/10 hover:bg-white/20 border border-white/20 rounded-2xl transition-all backdrop-blur-md cursor-pointer"
+                >
+                  <Sparkles className="w-4 h-4 text-indigo-300" />
+                  <span>Create Account</span>
+                </button>
 
-            <button
-              type="button"
-              onClick={onOpenEmailModal}
-              className="inline-flex items-center gap-2 px-4 py-3 text-sm font-semibold text-rose-300 hover:text-white bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 rounded-2xl transition-all cursor-pointer"
-            >
-              <Mail className="w-4 h-4" />
-              <span>Send to Gmail</span>
-            </button>
+                <button
+                  type="button"
+                  onClick={onOpenNewTaskModal}
+                  className="inline-flex items-center gap-1.5 px-4 py-3 text-sm font-semibold text-indigo-200 hover:text-white bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-400/30 rounded-2xl transition-all cursor-pointer"
+                  title="Sign in required to create a task"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Create Task</span>
+                  <Lock className="w-3 h-3 text-indigo-300 ml-0.5" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => onNavigate("calendar")}
+                  className="inline-flex items-center gap-1.5 px-4 py-3 text-sm font-semibold text-purple-200 hover:text-white bg-purple-500/20 hover:bg-purple-500/30 border border-purple-400/30 rounded-2xl transition-all cursor-pointer"
+                  title="Sign in required to view calendar"
+                >
+                  <CalendarIcon className="w-4 h-4 text-purple-300" />
+                  <span>Calendar</span>
+                  <Lock className="w-3 h-3 text-purple-300 ml-0.5" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={onOpenEmailModal}
+                  className="inline-flex items-center gap-1.5 px-4 py-3 text-sm font-semibold text-rose-300 hover:text-white bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 rounded-2xl transition-all cursor-pointer"
+                  title="Sign in required to send email"
+                >
+                  <Mail className="w-4 h-4" />
+                  <span>Gmail</span>
+                  <Lock className="w-3 h-3 text-rose-300 ml-0.5" />
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => onNavigate("tasks")}
+                  className="inline-flex items-center gap-2 px-5 py-3 text-sm font-bold text-slate-950 bg-white hover:bg-slate-100 rounded-2xl transition-all shadow-md hover:shadow-lg cursor-pointer transform active:scale-95"
+                >
+                  <span>Manage Tasks</span>
+                  <ArrowRight className="w-4 h-4 text-indigo-600" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => onNavigate("calendar")}
+                  className="inline-flex items-center gap-2 px-5 py-3 text-sm font-bold text-white bg-white/10 hover:bg-white/20 border border-white/20 rounded-2xl transition-all backdrop-blur-md cursor-pointer"
+                >
+                  <CalendarIcon className="w-4 h-4 text-indigo-300" />
+                  <span>View Calendar</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={onOpenEmailModal}
+                  className="inline-flex items-center gap-2 px-4 py-3 text-sm font-semibold text-rose-300 hover:text-white bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 rounded-2xl transition-all cursor-pointer"
+                >
+                  <Mail className="w-4 h-4" />
+                  <span>Send to Gmail</span>
+                </button>
+              </>
+            )}
           </div>
         </div>
       </section>
@@ -142,10 +265,18 @@ export default function HomePage({
           </div>
           <div className="mt-3 flex items-baseline justify-between">
             <span className="text-2xl sm:text-3xl font-extrabold text-slate-900">
-              {totalTasks}
+              {user ? totalTasks : "—"}
             </span>
             <span className="text-xs font-semibold text-indigo-600 group-hover:translate-x-0.5 transition-transform inline-flex items-center gap-0.5">
-              View <ChevronRight className="w-3 h-3" />
+              {user ? (
+                <>
+                  View <ChevronRight className="w-3 h-3" />
+                </>
+              ) : (
+                <>
+                  <Lock className="w-3 h-3 text-slate-400 mr-0.5" /> Sign in
+                </>
+              )}
             </span>
           </div>
         </div>
@@ -165,10 +296,18 @@ export default function HomePage({
           </div>
           <div className="mt-3 flex items-baseline justify-between">
             <span className="text-2xl sm:text-3xl font-extrabold text-purple-900">
-              {scheduledCount}
+              {user ? scheduledCount : "—"}
             </span>
             <span className="text-xs font-semibold text-purple-600 group-hover:translate-x-0.5 transition-transform inline-flex items-center gap-0.5">
-              Calendar <ChevronRight className="w-3 h-3" />
+              {user ? (
+                <>
+                  Calendar <ChevronRight className="w-3 h-3" />
+                </>
+              ) : (
+                <>
+                  <Lock className="w-3 h-3 text-purple-400 mr-0.5" /> Sign in
+                </>
+              )}
             </span>
           </div>
         </div>
@@ -188,10 +327,18 @@ export default function HomePage({
           </div>
           <div className="mt-3 flex items-baseline justify-between">
             <span className="text-2xl sm:text-3xl font-extrabold text-amber-900">
-              {todayTasks.filter((t) => !t.completed).length}
+              {user ? todayTasks.filter((t) => !t.completed).length : "—"}
             </span>
             <span className="text-xs font-semibold text-amber-600 group-hover:translate-x-0.5 transition-transform inline-flex items-center gap-0.5">
-              Focus <ChevronRight className="w-3 h-3" />
+              {user ? (
+                <>
+                  Focus <ChevronRight className="w-3 h-3" />
+                </>
+              ) : (
+                <>
+                  <Lock className="w-3 h-3 text-amber-500 mr-0.5" /> Sign in
+                </>
+              )}
             </span>
           </div>
         </div>
@@ -211,10 +358,10 @@ export default function HomePage({
           </div>
           <div className="mt-3 flex items-baseline justify-between">
             <span className="text-2xl sm:text-3xl font-extrabold text-emerald-900">
-              {completionPercent}%
+              {user ? `${completionPercent}%` : "—"}
             </span>
             <span className="text-xs font-semibold text-emerald-600">
-              {completedTasks}/{totalTasks}
+              {user ? `${completedTasks}/${totalTasks}` : "Sign in"}
             </span>
           </div>
         </div>
@@ -235,7 +382,9 @@ export default function HomePage({
                     Today's Agenda
                   </h3>
                   <p className="text-xs text-slate-500">
-                    {todayTasks.length} task{todayTasks.length === 1 ? "" : "s"} scheduled for today
+                    {user
+                      ? `${todayTasks.length} task${todayTasks.length === 1 ? "" : "s"} scheduled for today`
+                      : "Sign in required to view your personal schedule"}
                   </p>
                 </div>
               </div>
@@ -245,16 +394,57 @@ export default function HomePage({
                   type="button"
                   onClick={onOpenNewTaskModal}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-xl transition-colors cursor-pointer"
+                  title={user ? "Add a new task" : "Sign in required to add task"}
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>Add Task</span>
+                  {!user && <Lock className="w-3 h-3 text-indigo-400 ml-0.5" />}
                 </button>
               </div>
             </div>
 
-            {/* Today's task list */}
+            {/* Today's task list or Locked state */}
             <div className="mt-4">
-              {todayTasks.length === 0 ? (
+              {!user ? (
+                <div className="py-10 text-center text-slate-400">
+                  <div className="w-12 h-12 mx-auto mb-3 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-100 shadow-xs">
+                    <Lock className="w-6 h-6 stroke-[2]" />
+                  </div>
+                  <p className="text-base font-bold text-slate-800">
+                    Sign In Required to Manage Tasks
+                  </p>
+                  <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+                    You need to sign in or log in before you can create a task, view your agenda, or access your calendar.
+                  </p>
+                  <div className="mt-5 flex flex-wrap items-center justify-center gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onOpenAuthModal(
+                          "signin",
+                          "Please sign in or log in before creating a task.",
+                        )
+                      }
+                      className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-xs cursor-pointer transition-colors"
+                    >
+                      <LogIn className="w-3.5 h-3.5" />
+                      <span>Sign In to Create Tasks</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onOpenAuthModal(
+                          "signup",
+                          "Create an account to start adding tasks.",
+                        )
+                      }
+                      className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200/80 rounded-xl cursor-pointer transition-colors"
+                    >
+                      <span>Register</span>
+                    </button>
+                  </div>
+                </div>
+              ) : todayTasks.length === 0 ? (
                 <div className="py-10 text-center text-slate-400">
                   <Sparkles className="w-8 h-8 mx-auto mb-2 text-indigo-300 stroke-[1.5]" />
                   <p className="text-sm font-semibold text-slate-700">
@@ -333,11 +523,11 @@ export default function HomePage({
               onClick={() => onNavigate("tasks")}
               className="text-xs font-bold text-indigo-600 hover:text-indigo-800 inline-flex items-center gap-1 cursor-pointer"
             >
-              <span>Go to full task list</span>
+              <span>{user ? "Go to full task list" : "Sign in to access task list"}</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
 
-            {todayTasks.length > 0 && (
+            {user && todayTasks.length > 0 && (
               <button
                 type="button"
                 onClick={onOpenEmailModal}
@@ -359,7 +549,7 @@ export default function HomePage({
           >
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-300">
-                Interactive Schedule
+                {user ? "Interactive Schedule" : "Interactive Schedule 🔒"}
               </span>
               <CalendarIcon className="w-5 h-5 text-indigo-300" />
             </div>
@@ -367,10 +557,12 @@ export default function HomePage({
               Month & Day Calendar
             </h4>
             <p className="text-xs text-indigo-200/80 mt-1 leading-relaxed">
-              Browse monthly schedules, organize agenda by day, and spot upcoming milestones.
+              {user
+                ? "Browse monthly schedules, organize agenda by day, and spot upcoming milestones."
+                : "Sign in required to view monthly schedules and organize agenda items by day."}
             </p>
             <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between text-xs font-bold text-white group-hover:translate-x-1 transition-transform">
-              <span>Open Calendar View</span>
+              <span>{user ? "Open Calendar View" : "Sign In to Open Calendar 🔒"}</span>
               <ArrowRight className="w-4 h-4" />
             </div>
           </div>
@@ -382,7 +574,7 @@ export default function HomePage({
           >
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-bold uppercase tracking-wider text-rose-600">
-                Email Dispatch
+                {user ? "Email Dispatch" : "Email Dispatch 🔒"}
               </span>
               <Mail className="w-5 h-5 text-rose-500" />
             </div>
@@ -390,10 +582,12 @@ export default function HomePage({
               Sync to Gmail
             </h4>
             <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-              1-click pre-filled draft in Gmail or direct background delivery via Nodemailer.
+              {user
+                ? "1-click pre-filled draft in Gmail or direct background delivery via Nodemailer."
+                : "Sign in required to compose and dispatch your task agenda straight to Gmail."}
             </p>
             <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-bold text-rose-700 group-hover:translate-x-1 transition-transform">
-              <span>Send Tasks to Gmail</span>
+              <span>{user ? "Send Tasks to Gmail" : "Sign In to Use Gmail 🔒"}</span>
               <ArrowRight className="w-4 h-4" />
             </div>
           </div>
@@ -403,7 +597,7 @@ export default function HomePage({
             <div className="flex items-center gap-2">
               <Zap className="w-4 h-4 text-amber-500" />
               <span className="font-semibold text-slate-800">
-                {pendingTasks} Pending Tasks
+                {user ? `${pendingTasks} Pending Tasks` : "Personal Task Tracker"}
               </span>
             </div>
             <button
@@ -411,7 +605,7 @@ export default function HomePage({
               onClick={() => onNavigate("tasks")}
               className="font-bold text-indigo-600 hover:underline cursor-pointer"
             >
-              Start now
+              {user ? "Start now" : "Sign in to start"}
             </button>
           </div>
         </section>

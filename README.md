@@ -8,11 +8,12 @@
 
 - [Overview](#-overview)
 - [Key Features in Depth](#-key-features-in-depth)
-  - [1. Executive Homepage & Dashboard](#1-executive-homepage--dashboard)
-  - [2. Comprehensive Task Management](#2-comprehensive-task-management)
-  - [3. Interactive Calendar & Scheduler](#3-interactive-calendar--scheduler)
-  - [4. Gmail & Email Integration](#4-gmail--email-integration)
-  - [5. Resilient Local Demo Mode](#5-resilient-local-demo-mode)
+  - [1. User Authentication & Protected Access](#1-user-authentication--protected-access)
+  - [2. Executive Homepage & Dashboard](#2-executive-homepage--dashboard)
+  - [3. Comprehensive Task Management](#3-comprehensive-task-management)
+  - [4. Interactive Calendar & Scheduler](#4-interactive-calendar--scheduler)
+  - [5. Gmail & Email Integration](#5-gmail--email-integration)
+  - [6. Resilient Local Demo Mode](#6-resilient-local-demo-mode)
 - [Architecture & Tech Stack](#-architecture--tech-stack)
 - [Project Directory Structure](#-project-directory-structure)
 - [Prerequisites](#-prerequisites)
@@ -41,8 +42,17 @@ Instead of requiring external cloud databases or complex container setups, the a
 
 ## 🌟 Key Features in Depth
 
-### 1. Executive Homepage & Dashboard
+### 1. User Authentication & Protected Access
+* **Sign In & Log In Enforcement:** Users must sign in or register before they can create tasks, access the calendar view, or send email agendas.
+* **Route & Feature Interception:** Direct URLs (`#/tasks`, `#/calendar`, `#/email`, etc.) and all creation/calendar/email triggers are intercepted for unauthenticated visitors, presenting a clear prompt to sign in or log in.
+* **Context-Aware Auth Modal:** Explains exactly why authentication is required (e.g. *"Please sign in or log in before creating a task."*) and preserves your intended action upon authentication.
+* **Secure Backend Enforcement:** All endpoints (`/api/tasks`, `/api/tasks/:id`, `/api/tasks/send-email`, etc.) require valid JWT bearer tokens, hashed passwords using salted `scrypt`, and return 401 Unauthorized for unauthenticated requests.
+
+---
+
+### 2. Executive Homepage & Dashboard
 * **Dynamic Time-Aware Greeting:** Personalized header that greets you based on local time (*Good morning*, *Good afternoon*, *Good evening*) and displays today's date.
+* **Guest Landing State:** Displays clear sign-in/register banners, locked agenda indicators, and visual cues for guests while welcoming authenticated users to their personal dashboard.
 * **Live Overview Metrics:**
   * **Total Tasks:** Cumulative volume of tasks in the database.
   * **Scheduled Tasks:** Tasks linked to a due date or calendar timeline.
@@ -50,9 +60,10 @@ Instead of requiring external cloud databases or complex container setups, the a
   * **Completed %:** Real-time completion progress bar with percentage tracking.
 * **Today's Focus Spotlight:** Interactive checklist of tasks scheduled for today on the homepage, allowing quick completion without switching views.
 * **Persistent Top Navigation Bar:**
-  * Quick links to **Home**, **Tasks**, and **Calendar** with real-time pending badges.
+  * Quick links to **Home**, **Tasks**, and **Calendar** with real-time pending badges and lock badges for unauthenticated guests.
   * Global **"+ New Task"** button accessible from anywhere in the app.
   * Direct **"Gmail Sync"** trigger.
+  * Profile indicator displaying the active user and logout action, or a prominent **Sign In** button.
   * Connection indicator displaying **Online** (connected to SQLite API) or **Demo** (running client-side fallback).
 
 ---
@@ -270,16 +281,19 @@ This ensures pre-existing databases seamlessly upgrade with zero data loss.
 ## 📡 REST API Reference & Examples
 
 All endpoints return JSON responses. Errors follow the format `{ "error": "message" }`.
+Task endpoints require an authenticated session. Sign up or log in using the auth endpoints, then include the returned token as `Authorization: Bearer <token>` on task requests. Unauthenticated task requests return `401 Authentication required.`.
 
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |
 | `GET` | `/api/health` | Health check (`{ "status": "ok" }`) |
-| `GET` | `/api/tasks` | List all tasks ordered newest first |
-| `POST` | `/api/tasks` | Create a new task |
-| `PATCH` | `/api/tasks/:id` | Update title, description, completed status, or schedule date |
-| `DELETE` | `/api/tasks/:id` | Delete task by ID (`204 No Content`) |
-| `POST` | `/api/tasks/send-email` | Send tasks agenda via Gmail / SMTP |
-| `POST` | `/api/tasks/:id/send-email`| Send a single specific task to email |
+| `POST` | `/api/auth/signup` | Create an account and return a session token |
+| `POST` | `/api/auth/login` | Log in and return a session token |
+| `GET` | `/api/tasks` | List authenticated user's tasks (requires bearer token) |
+| `POST` | `/api/tasks` | Create a task (requires bearer token) |
+| `PATCH` | `/api/tasks/:id` | Update a task (requires bearer token) |
+| `DELETE` | `/api/tasks/:id` | Delete a task by ID (requires bearer token; `204 No Content`) |
+| `POST` | `/api/tasks/send-email` | Send tasks agenda via Gmail / SMTP (requires bearer token) |
+| `POST` | `/api/tasks/:id/send-email`| Send a single specific task to email (requires bearer token) |
 
 ### Example Payloads
 
@@ -514,4 +528,3 @@ cd Backend && npm test
 ## 📄 License
 
 This project is licensed under the MIT License.
-

@@ -3,13 +3,45 @@
 // when the backend server is not running.
 
 const BASE = "/api";
+const TOKEN_KEY = "task_tracker_auth_token";
+const USER_KEY = "task_tracker_auth_user";
+
+export function getStoredToken() {
+  return localStorage.getItem(TOKEN_KEY);
+}
+
+export function setStoredAuth(user, token) {
+  if (token) localStorage.setItem(TOKEN_KEY, token);
+  if (user) localStorage.setItem(USER_KEY, JSON.stringify(user));
+}
+
+export function clearStoredAuth() {
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(USER_KEY);
+}
+
+export function getStoredUser() {
+  try {
+    const raw = localStorage.getItem(USER_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
 
 async function request(path, options = {}) {
   let res;
+  const token = getStoredToken();
+  const headers = {
+    "Content-Type": "application/json",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(options.headers || {}),
+  };
+
   try {
     res = await fetch(BASE + path, {
-      headers: { "Content-Type": "application/json" },
       ...options,
+      headers,
     });
   } catch {
     // Network failure (server down, CORS, or connection refused)
@@ -38,6 +70,35 @@ async function request(path, options = {}) {
 }
 
 export const api = {
+  health: () => request("/health"),
+
+  // Auth API
+  signup: async (credentials) => {
+    const data = await request("/auth/signup", {
+      method: "POST",
+      body: JSON.stringify(credentials),
+    });
+    if (data.token && data.user) {
+      setStoredAuth(data.user, data.token);
+    }
+    return data;
+  },
+  login: async (credentials) => {
+    const data = await request("/auth/login", {
+      method: "POST",
+      body: JSON.stringify(credentials),
+    });
+    if (data.token && data.user) {
+      setStoredAuth(data.user, data.token);
+    }
+    return data;
+  },
+  getMe: () => request("/auth/me"),
+  logout: () => {
+    clearStoredAuth();
+  },
+
+  // Tasks API
   listTasks: async () => {
     const data = await request("/tasks");
     if (Array.isArray(data)) return data;
@@ -125,11 +186,39 @@ function saveStoredTasks(tasks) {
 }
 
 export const localApi = {
+  // Auth fallback
+  signup: async ({ name, email }) => {
+    await new Promise((r) => setTimeout(r, 150));
+    const user = { id: 999, name, email, createdAt: new Date().toISOString() };
+    const token = "demo-local-token-" + Date.now();
+    setStoredAuth(user, token);
+    return { user, token };
+  },
+  login: async ({ email }) => {
+    await new Promise((r) => setTimeout(r, 150));
+    const user = { id: 999, name: email.split("@")[0], email, createdAt: new Date().toISOString() };
+    const token = "demo-local-token-" + Date.now();
+    setStoredAuth(user, token);
+    return { user, token };
+  },
+  getMe: async () => {
+    const user = getStoredUser();
+    if (!user) throw new Error("Not logged in");
+    return { user };
+  },
+  logout: () => {
+    clearStoredAuth();
+  },
+
   listTasks: async () => {
-    await new Promise((r) => setTimeout(r, 150)); // simulate quick local delay
+    const user = getStoredUser();
+    if (!user) throw new Error("Authentication required. Please sign in or log in to view tasks.");
+    await new Promise((r) => setTimeout(r, 150));
     return getStoredTasks();
   },
   createTask: async (task) => {
+    const user = getStoredUser();
+    if (!user) throw new Error("Authentication required. Please sign in or log in before creating a task.");
     await new Promise((r) => setTimeout(r, 100));
     const tasks = getStoredTasks();
     const newTask = {
@@ -144,6 +233,8 @@ export const localApi = {
     return newTask;
   },
   updateTask: async (id, changes) => {
+    const user = getStoredUser();
+    if (!user) throw new Error("Authentication required. Please sign in or log in.");
     await new Promise((r) => setTimeout(r, 100));
     const tasks = getStoredTasks();
     let updatedTask = null;
@@ -159,15 +250,19 @@ export const localApi = {
     return updatedTask;
   },
   deleteTask: async (id) => {
+    const user = getStoredUser();
+    if (!user) throw new Error("Authentication required. Please sign in or log in.");
     await new Promise((r) => setTimeout(r, 100));
     const tasks = getStoredTasks();
     saveStoredTasks(tasks.filter((t) => t.id !== id));
     return null;
   },
   sendEmail: async ({ to, subject, taskId, taskIds, sendAllScheduled }) => {
+    const user = getStoredUser();
+    if (!user) throw new Error("Authentication required. Please sign in or log in before sending emails.");
     await new Promise((r) => setTimeout(r, 200));
     const tasks = getStoredTasks();
-    let selected = [];
+    let selected;
     if (taskId) {
       selected = tasks.filter((t) => t.id === taskId);
     } else if (Array.isArray(taskIds) && taskIds.length > 0) {
@@ -209,4 +304,3 @@ export const localApi = {
     return localApi.sendEmail({ ...payload, taskId: id });
   },
 };
-

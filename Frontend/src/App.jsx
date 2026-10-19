@@ -1,5 +1,5 @@
-import { useEffect, useState, useMemo } from "react";
-import { api, localApi } from "./api.js";
+import { useEffect, useRef, useState } from "react";
+import { api, localApi, getStoredUser } from "./api.js";
 import Navbar from "./Components/Navbar.jsx";
 import HomePage from "./Components/HomePage.jsx";
 import TaskForm from "./Components/TaskForm.jsx";
@@ -8,6 +8,7 @@ import CalendarView from "./Components/CalendarView.jsx";
 import EmailModal from "./Components/EmailModal.jsx";
 import NewTaskModal from "./Components/NewTaskModal.jsx";
 import ConfirmDialog from "./Components/ConfirmDialog.jsx";
+import AuthModal from "./Components/AuthModal.jsx";
 import {
   AlertCircle,
   X,
@@ -23,16 +24,75 @@ export default function App() {
   const [isOfflineMode, setIsOfflineMode] = useState(false);
   const [toast, setToast] = useState(null);
 
+  // Authenticated user state
+  const [user, setUser] = useState(() => getStoredUser());
+  const initialUser = useRef(user);
+
+  const initialHash = window.location.hash.toLowerCase();
+  const initialPage = initialHash.includes("calendar")
+    ? "calendar"
+    : initialHash.includes("tasks")
+      ? "tasks"
+      : "home";
+
+  const getInitialProtectedPage = () => {
+    if (getStoredUser()) return null;
+    if (initialPage === "calendar") {
+      return {
+        type: "navigate",
+        page: "calendar",
+        reason: "Please sign in or log in before accessing the calendar.",
+      };
+    }
+    if (initialPage === "tasks") {
+      return {
+        type: "navigate",
+        page: "tasks",
+        reason: "Please sign in or log in before accessing task management.",
+      };
+    }
+    if (initialHash.includes("email")) {
+      return {
+        type: "email",
+        reason: "Please sign in or log in before sending task agendas via email.",
+      };
+    }
+    if (initialHash.includes("new") || initialHash.includes("create")) {
+      return {
+        type: "newTask",
+        reason: "Please sign in or log in before creating a task.",
+      };
+    }
+    return null;
+  };
+
+  const initialProtectedPage = getInitialProtectedPage();
+
   // Page routing: 'home' | 'tasks' | 'calendar'
+  // When unauthenticated, currentPage is always locked to 'home'
   const [currentPage, setCurrentPage] = useState(() => {
-    const hash = window.location.hash.toLowerCase();
-    if (hash.includes("calendar")) return "calendar";
-    if (hash.includes("tasks")) return "tasks";
-    return "home";
+    return initialProtectedPage ? "home" : (user ? initialPage : "home");
   });
+  const [pendingAuthAction, setPendingAuthAction] = useState(initialProtectedPage);
 
   // Modal states
   const [isNewTaskModalOpen, setIsNewTaskModalOpen] = useState(false);
+  const [newTaskInitialDate, setNewTaskInitialDate] = useState(null);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(() => {
+    return (
+      initialHash.includes("login") ||
+      initialHash.includes("signin") ||
+      Boolean(initialProtectedPage)
+    );
+  });
+  const [authModalMode, setAuthModalMode] = useState(() => {
+    return initialHash.includes("signup") || initialHash.includes("register")
+      ? "signup"
+      : "signin";
+  });
+  const [authModalReason, setAuthModalReason] = useState(() => {
+    return initialProtectedPage?.reason || null;
+  });
   const [emailModalState, setEmailModalState] = useState({
     isOpen: false,
     taskId: null,
@@ -42,24 +102,115 @@ export default function App() {
   // Active client according to current mode
   const currentClient = isOfflineMode ? localApi : api;
 
+  function requestSignIn(action = {}) {
+    setPendingAuthAction(action);
+    setCurrentPage("home");
+    setAuthModalMode(action.mode || "signin");
+    setAuthModalReason(action.reason || "Please sign in or log in to continue.");
+    setIsAuthModalOpen(true);
+    if (window.location.hash !== "#/") {
+      window.location.hash = "/";
+    }
+  }
+
   // Sync hash on navigation
   function navigateTo(page) {
+    if (!user && page !== "home") {
+      const reason =
+        page === "calendar"
+          ? "Please sign in or log in before accessing the calendar."
+          : "Please sign in or log in before accessing task management.";
+      requestSignIn({ type: "navigate", page, reason });
+      return;
+    }
     setCurrentPage(page);
     window.location.hash = page === "home" ? "/" : `/${page}`;
     window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function openNewTaskModal(date = null) {
+    if (!user) {
+      requestSignIn({
+        type: "newTask",
+        date: typeof date === "string" ? date : null,
+        reason: "Please sign in or log in before creating a task.",
+      });
+      return;
+    }
+    setNewTaskInitialDate(typeof date === "string" ? date : null);
+    setIsNewTaskModalOpen(true);
+  }
+
+  function handleOpenEmail(options = {}) {
+    if (!user) {
+      requestSignIn({
+        type: "email",
+        options,
+        reason: "Please sign in or log in before sending task agendas via email.",
+      });
+      return;
+    }
+    setEmailModalState({
+      isOpen: true,
+      taskId: options.taskId || null,
+      date: options.date || null,
+    });
+  }
+
+  function openAuthModal(mode = "signin", reason = null) {
+    setPendingAuthAction(null);
+    setAuthModalMode(mode);
+    setAuthModalReason(reason);
+    setIsAuthModalOpen(true);
+  }
+
+  function closeAuthModal() {
+    setPendingAuthAction(null);
+    setAuthModalReason(null);
+    setIsAuthModalOpen(false);
+    if (!user && window.location.hash !== "#/") {
+      window.location.hash = "/";
+    }
   }
 
   // Handle browser back/forward buttons
   useEffect(() => {
     function handleHashChange() {
       const hash = window.location.hash.toLowerCase();
-      if (hash.includes("calendar")) setCurrentPage("calendar");
-      else if (hash.includes("tasks")) setCurrentPage("tasks");
-      else setCurrentPage("home");
+      if (hash.includes("login") || hash.includes("signin")) {
+        setAuthModalMode("signin");
+        setAuthModalReason(null);
+        setIsAuthModalOpen(true);
+      } else if (hash.includes("signup") || hash.includes("register")) {
+        setAuthModalMode("signup");
+        setAuthModalReason(null);
+        setIsAuthModalOpen(true);
+      } else {
+        const page = hash.includes("calendar")
+          ? "calendar"
+          : hash.includes("tasks")
+            ? "tasks"
+            : "home";
+        if (!user && page !== "home") {
+          const reason =
+            page === "calendar"
+              ? "Please sign in or log in before accessing the calendar."
+              : "Please sign in or log in before accessing task management.";
+          setPendingAuthAction({ type: "navigate", page, reason });
+          setCurrentPage("home");
+          setAuthModalMode("signin");
+          setAuthModalReason(reason);
+          setIsAuthModalOpen(true);
+          window.location.hash = "/";
+          return;
+        }
+        setCurrentPage(user ? page : "home");
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
     }
     window.addEventListener("hashchange", handleHashChange);
     return () => window.removeEventListener("hashchange", handleHashChange);
-  }, []);
+  }, [user]);
 
   // Auto-dismiss toast after 4 seconds
   useEffect(() => {
@@ -68,11 +219,74 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [toast]);
 
-  // Fetch initial tasks on mount
+  // Validate session on mount if user exists
   useEffect(() => {
     let ignore = false;
 
-    async function fetchInitialTasks() {
+    async function verifyAuth() {
+      if (!initialUser.current) return;
+      try {
+        const data = await api.getMe();
+        if (
+          !ignore &&
+          data?.user &&
+          (data.user.id !== initialUser.current.id ||
+            data.user.email !== initialUser.current.email ||
+            data.user.name !== initialUser.current.name)
+        ) {
+          setUser(data.user);
+        }
+      } catch {
+        if (ignore) return;
+        // If token expired, clear auth
+        api.logout();
+        setUser(null);
+        const hash = window.location.hash.toLowerCase();
+        const page = hash.includes("calendar")
+          ? "calendar"
+          : hash.includes("tasks")
+            ? "tasks"
+            : "home";
+        if (page !== "home") {
+          setPendingAuthAction({ type: "navigate", page });
+          setCurrentPage("home");
+          setIsAuthModalOpen(true);
+        }
+      }
+    }
+    verifyAuth();
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
+  // Fetch initial tasks on mount or when user changes
+  useEffect(() => {
+    let ignore = false;
+
+    async function fetchTasks() {
+      if (!user) {
+        setTasks([]);
+        try {
+          await api.health();
+          setError(null);
+          setIsOfflineMode(false);
+        } catch (err) {
+          if (!err.isNetworkError) {
+            setError(err.message);
+          } else {
+            setError(
+              "Backend server not detected on port 3000. Sign-in is available in Local Demo mode.",
+            );
+            setIsOfflineMode(true);
+          }
+        } finally {
+          setLoading(false);
+        }
+        return;
+      }
+
+      setLoading(true);
       try {
         const data = await api.listTasks();
         if (!ignore) {
@@ -100,12 +314,12 @@ export default function App() {
       }
     }
 
-    fetchInitialTasks();
+    fetchTasks();
 
     return () => {
       ignore = true;
     };
-  }, []);
+  }, [user]);
 
   async function handleRetryBackend() {
     setLoading(true);
@@ -126,7 +340,60 @@ export default function App() {
     }
   }
 
+  function handleAuthSuccess(loggedInUser, message) {
+    setUser(loggedInUser);
+    setIsAuthModalOpen(false);
+    setToast({
+      type: "success",
+      message: message || `Welcome, ${loggedInUser.name || loggedInUser.email}!`,
+    });
+    if (pendingAuthAction?.type === "navigate") {
+      setCurrentPage(pendingAuthAction.page);
+      window.location.hash =
+        pendingAuthAction.page === "home" ? "/" : `/${pendingAuthAction.page}`;
+    } else if (pendingAuthAction?.type === "newTask") {
+      setNewTaskInitialDate(pendingAuthAction.date || null);
+      setIsNewTaskModalOpen(true);
+    } else if (pendingAuthAction?.type === "email") {
+      const options = pendingAuthAction.options || {};
+      setEmailModalState({
+        isOpen: true,
+        taskId: options.taskId || null,
+        date: options.date || null,
+      });
+    }
+    setPendingAuthAction(null);
+    setAuthModalReason(null);
+    // Remove login hash
+    if (window.location.hash.includes("login") || window.location.hash.includes("signin")) {
+      window.location.hash = "/";
+    }
+  }
+
+  function handleLogout() {
+    api.logout();
+    setUser(null);
+    setTasks([]);
+    setCurrentPage("home");
+    setIsNewTaskModalOpen(false);
+    setNewTaskInitialDate(null);
+    setEmailModalState({ isOpen: false, taskId: null, date: null });
+    setPendingAuthAction(null);
+    setAuthModalReason(null);
+    if (window.location.hash !== "#/") {
+      window.location.hash = "/";
+    }
+    setToast({ type: "success", message: "You have signed out." });
+  }
+
   async function handleCreate(values) {
+    if (!user) {
+      requestSignIn({
+        type: "newTask",
+        reason: "Please sign in or log in before creating a task.",
+      });
+      throw new Error("Please sign in or log in before creating a task.");
+    }
     try {
       const created = await currentClient.createTask(values);
       setTasks((prev) => [created, ...prev]);
@@ -150,6 +417,14 @@ export default function App() {
   }
 
   async function handleToggle(task) {
+    if (!user) {
+      requestSignIn({
+        type: "navigate",
+        page: "tasks",
+        reason: "Please sign in or log in to manage tasks.",
+      });
+      return;
+    }
     const nextCompleted = !task.completed;
     setTasks((prev) =>
       prev.map((t) => (t.id === task.id ? { ...t, completed: nextCompleted } : t)),
@@ -175,6 +450,14 @@ export default function App() {
   }
 
   async function handleEdit(id, values) {
+    if (!user) {
+      requestSignIn({
+        type: "navigate",
+        page: "tasks",
+        reason: "Please sign in or log in to edit tasks.",
+      });
+      throw new Error("Please sign in or log in to edit tasks.");
+    }
     try {
       const updated = await currentClient.updateTask(id, values);
       setTasks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
@@ -192,6 +475,14 @@ export default function App() {
   }
 
   async function handleConfirmDelete() {
+    if (!user) {
+      requestSignIn({
+        type: "navigate",
+        page: "tasks",
+        reason: "Please sign in or log in to delete tasks.",
+      });
+      return;
+    }
     if (!taskToDelete) return;
     try {
       await currentClient.deleteTask(taskToDelete.id);
@@ -211,14 +502,6 @@ export default function App() {
     }
   }
 
-  function handleOpenEmail(options = {}) {
-    setEmailModalState({
-      isOpen: true,
-      taskId: options.taskId || null,
-      date: options.date || null,
-    });
-  }
-
   return (
     <div className="min-h-screen bg-slate-50/80 text-slate-900 selection:bg-indigo-600 selection:text-white flex flex-col">
       {/* Decorative ambient gradient backdrop */}
@@ -232,10 +515,13 @@ export default function App() {
         currentPage={currentPage}
         onNavigate={navigateTo}
         tasks={tasks}
+        user={user}
         isOfflineMode={isOfflineMode}
         onRetryBackend={handleRetryBackend}
-        onOpenNewTaskModal={() => setIsNewTaskModalOpen(true)}
+        onOpenNewTaskModal={openNewTaskModal}
         onOpenEmailModal={() => handleOpenEmail({})}
+        onOpenAuthModal={openAuthModal}
+        onLogout={handleLogout}
       />
 
       {/* Main Content View Container */}
@@ -296,15 +582,17 @@ export default function App() {
             {currentPage === "home" && (
               <HomePage
                 tasks={tasks}
+                user={user}
                 onNavigate={navigateTo}
                 onToggleTask={handleToggle}
-                onOpenNewTaskModal={() => setIsNewTaskModalOpen(true)}
+                onOpenNewTaskModal={openNewTaskModal}
                 onOpenEmailModal={() => handleOpenEmail({})}
+                onOpenAuthModal={openAuthModal}
               />
             )}
 
-            {/* VIEW 2: TASKS PAGE */}
-            {currentPage === "tasks" && (
+            {/* VIEW 2: TASKS PAGE - STRICTLY REQUIRES AUTH */}
+            {currentPage === "tasks" && user && (
               <div className="max-w-3xl mx-auto space-y-6 animate-in fade-in duration-200">
                 <div className="flex items-center justify-between">
                   <div>
@@ -338,8 +626,8 @@ export default function App() {
               </div>
             )}
 
-            {/* VIEW 3: CALENDAR PAGE */}
-            {currentPage === "calendar" && (
+            {/* VIEW 3: CALENDAR PAGE - STRICTLY REQUIRES AUTH */}
+            {currentPage === "calendar" && user && (
               <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in duration-200">
                 <div className="flex items-center justify-between">
                   <div>
@@ -355,9 +643,7 @@ export default function App() {
                 <CalendarView
                   tasks={tasks}
                   onToggleTask={handleToggle}
-                  onOpenTaskFormWithDate={(dateStr) => {
-                    setIsNewTaskModalOpen(true);
-                  }}
+                  onOpenTaskFormWithDate={openNewTaskModal}
                   onOpenEmailModal={handleOpenEmail}
                 />
               </div>
@@ -366,26 +652,47 @@ export default function App() {
         )}
       </div>
 
-      {/* Global Task Creation Modal */}
-      <NewTaskModal
-        isOpen={isNewTaskModalOpen}
-        onClose={() => setIsNewTaskModalOpen(false)}
-        onSubmit={handleCreate}
+      {/* Sign In & Login Modal */}
+      <AuthModal
+        key={`auth-${isAuthModalOpen}-${authModalMode}`}
+        isOpen={isAuthModalOpen}
+        isModal={true}
+        initialMode={authModalMode}
+        authReason={authModalReason}
+        onClose={closeAuthModal}
+        onSuccess={handleAuthSuccess}
+        apiClient={currentClient}
       />
 
-      {/* Email / Gmail Modal */}
-      <EmailModal
-        isOpen={emailModalState.isOpen}
-        tasks={tasks}
-        initialTaskId={emailModalState.taskId}
-        initialDate={emailModalState.date}
-        onClose={() =>
-          setEmailModalState({ isOpen: false, taskId: null, date: null })
-        }
-        onSendEmailApi={async (payload) => {
-          return await currentClient.sendEmail(payload);
-        }}
-      />
+      {/* Global Task Creation Modal - STRICTLY REQUIRES AUTH */}
+      {user && (
+        <NewTaskModal
+          isOpen={isNewTaskModalOpen}
+          initialDate={newTaskInitialDate}
+          onClose={() => {
+            setIsNewTaskModalOpen(false);
+            setNewTaskInitialDate(null);
+          }}
+          onSubmit={handleCreate}
+        />
+      )}
+
+      {/* Email / Gmail Modal - STRICTLY REQUIRES AUTH */}
+      {user && (
+        <EmailModal
+          key={`email-${emailModalState.isOpen}-${emailModalState.taskId}-${emailModalState.date}`}
+          isOpen={emailModalState.isOpen}
+          tasks={tasks}
+          initialTaskId={emailModalState.taskId}
+          initialDate={emailModalState.date}
+          onClose={() =>
+            setEmailModalState({ isOpen: false, taskId: null, date: null })
+          }
+          onSendEmailApi={async (payload) => {
+            return await currentClient.sendEmail(payload);
+          }}
+        />
+      )}
 
       {/* Delete Confirmation Modal */}
       {taskToDelete && (
