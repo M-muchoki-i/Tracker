@@ -2,10 +2,14 @@
 
 > **A classy, modern full-stack productivity suite for managing personal tasks, planning agendas on an interactive calendar, and dispatching summaries directly to Gmail.**
 
+[![Watch Live Demo Video](https://img.shields.io/badge/🎬%20Watch%20Live%20Demo%20Video-Google%20Drive-4285F4?style=for-the-badge&logo=googledrive&logoColor=white)](https://drive.google.com/file/d/1q9NO8euRILpzfZASrSzUKcI3L0w6EbM1/view?usp=sharing)
+> 🎥 **Live Demo Video:** [Watch the full walkthrough demo on Google Drive](https://drive.google.com/file/d/1q9NO8euRILpzfZASrSzUKcI3L0w6EbM1/view?usp=sharing)
+
 ---
 
 ## 📖 Table of Contents
 
+- [🎥 Live Demo Video](#-live-demo-video)
 - [Overview](#-overview)
 - [Key Features in Depth](#-key-features-in-depth)
   - [1. User Authentication & Protected Access](#1-user-authentication--protected-access)
@@ -26,6 +30,14 @@
 - [Gmail & SMTP Setup Guide](#-gmail--smtp-setup-guide)
 - [Troubleshooting & FAQs](#-troubleshooting--faqs)
 - [Automated Testing](#-automated-testing)
+
+---
+
+## 🎥 Live Demo Video
+
+Watch the complete demonstration video showcasing user authentication, task management, interactive calendar scheduling, and Gmail dispatch:
+
+👉 **[Click Here to Watch the Live Demo on Google Drive](https://drive.google.com/file/d/1q9NO8euRILpzfZASrSzUKcI3L0w6EbM1/view?usp=sharing)**
 
 ---
 
