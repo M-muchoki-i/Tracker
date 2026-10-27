@@ -169,7 +169,7 @@ Tracker/
 │   ├── .env.example         # Environment template (Port, DB path, Gmail credentials)
 │   ├── src/
 │   │   ├── server.js        # Server entry point (reads .env, binds to 0.0.0.0:3000)
-│   │   ├── app.js           # Routes, input validation, email logic, error handler
+│   │   ├── createApp.js     # Routes, input validation, email logic, error handler
 │   │   └── db.js            # SQLite schema initialization & auto-migration
 │   ├── test/
 │   │   └── tasks.test.js    # Vitest suite (CRUD, calendar scheduling, email tests)

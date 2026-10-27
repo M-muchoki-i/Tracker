@@ -3,7 +3,7 @@ import "dotenv/config";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createDb } from "./db.js";
-import { createApp } from "./app.js";
+import { createApp } from "./createApp.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 

@@ -3,7 +3,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import request from "supertest";
 import { createDb } from "../src/db.js";
-import { createApp } from "../src/app.js";
+import { createApp } from "../src/createApp.js";
 
 let app;
 let token;
